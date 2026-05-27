@@ -13,24 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+      - name: Configure CMake
+        run: cmake -B build -S . -A x64
 
-      - name: Build with MSVC
-        shell: cmd
-        run: |
-          cl /EHsc /W4 /O2 /std:c++17 /nologo /utf-8 /MT ^
-            src\main.cpp ^
-            src\monitor.cpp ^
-            src\eventlog.cpp ^
-            src\report.cpp ^
-            /Fediag_wake.exe ^
-            powrprof.lib wevtapi.lib ole32.lib oleaut32.lib
+      - name: Build
+        run: cmake --build build --config Release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: diag_wake-windows-x64
-          path: diag_wake.exe
+          path: build/Release/diag_wake.exe
