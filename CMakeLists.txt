@@ -11,7 +11,7 @@ add_executable(diag_wake
     src/report.cpp
 )
 
-target_link_libraries(diag_wake PRIVATE powrprof wevtapi ole32 oleaut32 uuid)
+target_link_libraries(diag_wake PRIVATE powrprof wevtapi ole32 oleaut32)
 
 if(MSVC)
     target_compile_options(diag_wake PRIVATE /W4 /permissive-)

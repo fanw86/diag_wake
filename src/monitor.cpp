@@ -1,34 +1,13 @@
+// Define INITGUID in exactly one translation unit so that
+// windows.h/winnt.h emits actual GUID definitions instead of extern declarations.
+#define INITGUID
+
 #include "monitor.h"
 #include <powrprof.h>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <chrono>
-
-// Power setting GUIDs (from winnt.h/wdm.h, defined here for compatibility)
-#ifndef GUID_MONITOR_POWER_ON
-DEFINE_GUID(GUID_MONITOR_POWER_ON, 0x02731015, 0x4510, 0x4526, 0x99, 0xe6, 0xe5, 0xa1, 0x7e, 0xbd, 0x1a, 0xea);
-#endif
-
-#ifndef GUID_SYSTEM_AWAYMODE
-DEFINE_GUID(GUID_SYSTEM_AWAYMODE, 0x98a7f580, 0x01f7, 0x48aa, 0x9c, 0x0f, 0x44, 0x35, 0x2c, 0x29, 0xe5, 0xc0);
-#endif
-
-#ifndef GUID_CONSOLE_DISPLAY_STATE
-DEFINE_GUID(GUID_CONSOLE_DISPLAY_STATE, 0x6fe69556, 0x704a, 0x47a0, 0x8f, 0x24, 0xc2, 0x8d, 0x93, 0x6f, 0xda, 0x47);
-#endif
-
-#ifndef GUID_ACDC_POWER_SOURCE
-DEFINE_GUID(GUID_ACDC_POWER_SOURCE, 0x5d3e9a59, 0xe9d5, 0x4b00, 0xa6, 0xbd, 0xff, 0x34, 0xff, 0x51, 0x65, 0x48);
-#endif
-
-#ifndef GUID_BATTERY_PERCENTAGE_REMAINING
-DEFINE_GUID(GUID_BATTERY_PERCENTAGE_REMAINING, 0xa7ad8041, 0xb45a, 0x4cae, 0x87, 0xa3, 0xee, 0xcb, 0xb4, 0x68, 0xa9, 0xe1);
-#endif
-
-#ifndef GUID_IDLE_BACKGROUND_TASK
-DEFINE_GUID(GUID_IDLE_BACKGROUND_TASK, 0x515c31d8, 0xf734, 0x163d, 0xa0, 0xfd, 0x11, 0xa0, 0x8c, 0x91, 0xe8, 0xf1);
-#endif
 
 static std::string NowStr() {
     auto now = std::chrono::system_clock::now();
