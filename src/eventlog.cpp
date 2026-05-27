@@ -46,6 +46,16 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
         return results;
     }
 
+    // Create a render context that explicitly requests the system properties we need.
+    EVT_SYSTEM_PROPERTY_ID props[] = {
+        EvtSystemProviderName,
+        EvtSystemTimeCreated,
+        EvtSystemEventID,
+        EvtSystemLevel
+    };
+    EVT_HANDLE hContext = EvtCreateRenderContext(
+        static_cast<DWORD>(std::size(props)), props, EvtRenderContextSystem);
+
     EVT_HANDLE hEvents[16];
     DWORD count = 0;
     while (results.size() < static_cast<size_t>(maxCount) &&
@@ -53,42 +63,41 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
         for (DWORD i = 0; i < count && results.size() < static_cast<size_t>(maxCount); ++i) {
             PowerEvent ev;
 
-            // Render system properties.
-            // With NULL context, EvtRenderEventValues returns in this order:
-            // 0=ProviderName, 1=TimeCreated, 2=EventID, 3=Qualifiers, 4=Level, ...
-            DWORD bufSize = 0;
-            DWORD propCount = 0;
-            EvtRender(nullptr, hEvents[i], EvtRenderEventValues, 0, nullptr, &bufSize, &propCount);
-            if (bufSize > 0) {
-                std::vector<BYTE> buffer(bufSize);
-                EVT_VARIANT* values = reinterpret_cast<EVT_VARIANT*>(buffer.data());
-                if (EvtRender(nullptr, hEvents[i], EvtRenderEventValues, bufSize, values, &bufSize, &propCount)) {
-                    if (propCount > 0 && values[0].Type == EvtVarTypeString) {
-                        ev.provider = WstrToUtf8(values[0].StringVal);
-                    }
-                    if (propCount > 1 && values[1].Type == EvtVarTypeFileTime) {
-                        ULARGE_INTEGER uli;
-                        uli.QuadPart = values[1].FileTimeVal;
-                        FILETIME ft;
-                        ft.dwLowDateTime = uli.LowPart;
-                        ft.dwHighDateTime = uli.HighPart;
-                        ev.time = FileTimeToString(ft);
-                    }
-                    if (propCount > 2) {
-                        if (values[2].Type == EvtVarTypeUInt16) {
-                            ev.eventId = values[2].UInt16Val;
-                        } else if (values[2].Type == EvtVarTypeUInt32) {
-                            ev.eventId = static_cast<uint16_t>(values[2].UInt32Val & 0xFFFF);
+            if (hContext) {
+                DWORD bufSize = 0;
+                DWORD propCount = 0;
+                EvtRender(hContext, hEvents[i], EvtRenderEventValues, 0, nullptr, &bufSize, &propCount);
+                if (bufSize > 0) {
+                    std::vector<BYTE> buffer(bufSize);
+                    EVT_VARIANT* values = reinterpret_cast<EVT_VARIANT*>(buffer.data());
+                    if (EvtRender(hContext, hEvents[i], EvtRenderEventValues, bufSize, values, &bufSize, &propCount)) {
+                        // 0 = ProviderName, 1 = TimeCreated, 2 = EventID, 3 = Level
+                        if (propCount > 0 && values[0].Type == EvtVarTypeString) {
+                            ev.provider = WstrToUtf8(values[0].StringVal);
                         }
-                    }
-                    if (propCount > 4 && values[4].Type == EvtVarTypeByte) {
-                        ev.level = values[4].ByteVal;
+                        if (propCount > 1 && values[1].Type == EvtVarTypeFileTime) {
+                            ULARGE_INTEGER uli;
+                            uli.QuadPart = values[1].FileTimeVal;
+                            FILETIME ft;
+                            ft.dwLowDateTime = uli.LowPart;
+                            ft.dwHighDateTime = uli.HighPart;
+                            ev.time = FileTimeToString(ft);
+                        }
+                        if (propCount > 2) {
+                            if (values[2].Type == EvtVarTypeUInt16) {
+                                ev.eventId = values[2].UInt16Val;
+                            } else if (values[2].Type == EvtVarTypeUInt32) {
+                                ev.eventId = static_cast<uint16_t>(values[2].UInt32Val & 0xFFFF);
+                            }
+                        }
+                        if (propCount > 3 && values[3].Type == EvtVarTypeByte) {
+                            ev.level = values[3].ByteVal;
+                        }
                     }
                 }
             }
 
             // Try to get a description via FormatMessage.
-            // First try the actual provider, then fallback to Kernel-Power.
             EVT_HANDLE hPub = nullptr;
             if (ev.provider.find("Troubleshooter") != std::string::npos) {
                 hPub = EvtOpenPublisherMetadata(nullptr, L"Microsoft-Windows-Power-Troubleshooter", nullptr, 0, 0);
@@ -120,6 +129,7 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
         if (hEvents[i]) EvtClose(hEvents[i]);
     }
 
+    if (hContext) EvtClose(hContext);
     EvtClose(hQuery);
     return results;
 }
