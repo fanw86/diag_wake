@@ -66,7 +66,7 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
                     if (propCount > 0 && values[0].Type == EvtVarTypeString) {
                         ev.provider = WstrToUtf8(values[0].StringVal);
                     }
-                    if (propCount > 1 && values[1].Type == EvtVarTypeFiletime) {
+                    if (propCount > 1 && values[1].Type == EvtVarTypeFileTime) {
                         ULARGE_INTEGER uli;
                         uli.QuadPart = values[1].FileTimeVal;
                         FILETIME ft;

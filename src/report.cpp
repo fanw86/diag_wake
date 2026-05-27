@@ -1,11 +1,8 @@
 #include "report.h"
 #include "eventlog.h"
 #include <windows.h>
-#include <powrprof.h>
 #include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <vector>
+#include <cstdint>
 
 static void PrintPowerStatus() {
     SYSTEM_POWER_STATUS ps;
@@ -53,48 +50,19 @@ static void PrintPowerStatus() {
 static void PrintPowerSchemes() {
     std::cout << "\n=== POWER PLANS ===\n";
 
-    DWORD schemeGuidSize = 0;
-    DWORD schemeCount = 0;
-    if (PowerEnumerate(nullptr, nullptr, nullptr, ACCESS_SCHEME, 0, nullptr, &schemeGuidSize, &schemeCount) != ERROR_SUCCESS) {
-        std::cout << "  Failed to enumerate power schemes.\n";
+    FILE* pipe = _popen("powercfg /list", "r");
+    if (!pipe) {
+        std::cout << "  Failed to query power plans.\n";
         return;
     }
 
-    std::vector<BYTE> schemeBuffer(schemeGuidSize);
-    if (PowerEnumerate(nullptr, nullptr, nullptr, ACCESS_SCHEME, 0, schemeBuffer.data(), &schemeGuidSize, &schemeCount) != ERROR_SUCCESS) {
-        std::cout << "  Failed to enumerate power schemes.\n";
-        return;
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), pipe)) {
+        // Skip empty lines
+        if (buffer[0] == '\n' || buffer[0] == '\r') continue;
+        std::cout << "  " << buffer;
     }
-
-    GUID* activeGuid = nullptr;
-    DWORD activeSize = sizeof(GUID*);
-    PowerGetActiveScheme(nullptr, &activeGuid);
-
-    GUID** schemes = reinterpret_cast<GUID**>(schemeBuffer.data());
-    for (DWORD i = 0; i < schemeCount; ++i) {
-        DWORD nameSize = 0;
-        PowerReadFriendlyName(nullptr, schemes[i], nullptr, nullptr, nullptr, &nameSize);
-        if (nameSize > 0) {
-            std::vector<BYTE> nameBuf(nameSize);
-            if (PowerReadFriendlyName(nullptr, schemes[i], nullptr, nullptr, nameBuf.data(), &nameSize) == ERROR_SUCCESS) {
-                std::wstring name(reinterpret_cast<wchar_t*>(nameBuf.data()), nameBuf.size() / sizeof(wchar_t));
-                std::wcout << L"  ";
-                if (activeGuid && IsEqualGUID(*activeGuid, *schemes[i])) {
-                    std::wcout << L"[ACTIVE] ";
-                } else {
-                    std::wcout << L"         ";
-                }
-                std::wcout << name;
-
-                // Print GUID
-                wchar_t guidStr[40] = {};
-                StringFromGUID2(*schemes[i], guidStr, 39);
-                std::wcout << L" (" << guidStr << L")\n";
-            }
-        }
-    }
-
-    if (activeGuid) LocalFree(activeGuid);
+    _pclose(pipe);
 }
 
 static void PrintRecentEvents() {
