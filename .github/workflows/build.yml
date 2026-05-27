@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build with MSVC
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          if errorlevel 1 exit /b 1
+          cl /EHsc /W4 /O2 /std:c++17 /nologo /utf-8 /MT ^
+            src\main.cpp ^
+            src\monitor.cpp ^
+            src\eventlog.cpp ^
+            src\report.cpp ^
+            /Fediag_wake.exe ^
+            powrprof.lib wevtapi.lib ole32.lib oleaut32.lib
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag_wake-windows-x64
+          path: diag_wake.exe
