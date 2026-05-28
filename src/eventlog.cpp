@@ -54,7 +54,8 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
         EvtSystemLevel
     };
     EVT_HANDLE hContext = EvtCreateRenderContext(
-        static_cast<DWORD>(std::size(props)), props, EvtRenderContextSystem);
+        static_cast<DWORD>(sizeof(props) / sizeof(props[0])),
+        reinterpret_cast<LPCWSTR*>(props), EvtRenderContextSystem);
 
     EVT_HANDLE hEvents[16];
     DWORD count = 0;
