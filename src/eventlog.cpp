@@ -136,13 +136,22 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
                         if (propCount > 0 && values[0].Type == EvtVarTypeString) {
                             ev.provider = WstrToUtf8(values[0].StringVal);
                         }
-                        if (propCount > 1 && values[1].Type == EvtVarTypeFileTime) {
-                            ULARGE_INTEGER uli;
-                            uli.QuadPart = values[1].FileTimeVal;
-                            FILETIME ft;
-                            ft.dwLowDateTime = uli.LowPart;
-                            ft.dwHighDateTime = uli.HighPart;
-                            ev.time = FileTimeToString(ft);
+                        if (propCount > 1) {
+                            if (values[1].Type == EvtVarTypeFileTime) {
+                                ULARGE_INTEGER uli;
+                                uli.QuadPart = values[1].FileTimeVal;
+                                FILETIME ft;
+                                ft.dwLowDateTime = uli.LowPart;
+                                ft.dwHighDateTime = uli.HighPart;
+                                ev.time = FileTimeToString(ft);
+                            } else if (values[1].Type == EvtVarTypeSysTime && values[1].SysTimeVal) {
+                                SYSTEMTIME st = *values[1].SysTimeVal;
+                                std::ostringstream ss;
+                                ss << std::setfill('0')
+                                   << st.wYear << '-' << std::setw(2) << st.wMonth << '-' << std::setw(2) << st.wDay
+                                   << ' ' << std::setw(2) << st.wHour << ':' << std::setw(2) << st.wMinute << ':' << std::setw(2) << st.wSecond;
+                                ev.time = ss.str();
+                            }
                         }
                         if (propCount > 2) {
                             if (values[2].Type == EvtVarTypeUInt16) {
