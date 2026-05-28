@@ -5,8 +5,40 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 
 #pragma comment(lib, "wevtapi.lib")
+
+// Temporary diagnostic: print unexpected EVT variant types to stderr.
+static const char* EvtTypeName(int type) {
+    switch (type) {
+        case EvtVarTypeNull:        return "Null";
+        case EvtVarTypeString:      return "String";
+        case EvtVarTypeAnsiString:  return "AnsiString";
+        case EvtVarTypeSByte:       return "SByte";
+        case EvtVarTypeByte:        return "Byte";
+        case EvtVarTypeInt16:       return "Int16";
+        case EvtVarTypeUInt16:      return "UInt16";
+        case EvtVarTypeInt32:       return "Int32";
+        case EvtVarTypeUInt32:      return "UInt32";
+        case EvtVarTypeInt64:       return "Int64";
+        case EvtVarTypeUInt64:      return "UInt64";
+        case EvtVarTypeSingle:      return "Single";
+        case EvtVarTypeDouble:      return "Double";
+        case EvtVarTypeBoolean:     return "Boolean";
+        case EvtVarTypeBinary:      return "Binary";
+        case EvtVarTypeGuid:        return "Guid";
+        case EvtVarTypeSizeT:       return "SizeT";
+        case EvtVarTypeFileTime:    return "FileTime";
+        case EvtVarTypeSysTime:     return "SysTime";
+        case EvtVarTypeSid:         return "Sid";
+        case EvtVarTypeHexInt32:    return "HexInt32";
+        case EvtVarTypeHexInt64:    return "HexInt64";
+        case EvtVarTypeEvtHandle:   return "EvtHandle";
+        case EvtVarTypeEvtXml:      return "EvtXml";
+        default:                    return "Unknown";
+    }
+}
 
 static std::string WstrToUtf8(const wchar_t* wstr) {
     if (!wstr) return {};
@@ -67,12 +99,28 @@ static bool ExtractFromXml(EVT_HANDLE hEvent, PowerEvent& ev) {
     DWORD bufSize = 0;
     DWORD propCount = 0;
     EvtRender(nullptr, hEvent, EvtRenderEventXml, 0, nullptr, &bufSize, &propCount);
-    if (bufSize == 0) return false;
-    std::vector<wchar_t> buf(bufSize / sizeof(wchar_t) + 1);
-    if (!EvtRender(nullptr, hEvent, EvtRenderEventXml, bufSize, buf.data(), &bufSize, &propCount))
+    if (bufSize == 0) {
+        std::cerr << "[DEBUG] XML render: bufSize==0\n";
         return false;
+    }
+    std::vector<wchar_t> buf(bufSize / sizeof(wchar_t) + 1);
+    if (!EvtRender(nullptr, hEvent, EvtRenderEventXml, bufSize, buf.data(), &bufSize, &propCount)) {
+        std::cerr << "[DEBUG] XML render: EvtRender failed\n";
+        return false;
+    }
     std::string xml = WstrToUtf8(buf.data());
-    if (xml.empty()) return false;
+    if (xml.empty()) {
+        std::cerr << "[DEBUG] XML render: empty XML\n";
+        return false;
+    }
+
+    // Print a snippet of the raw XML for diagnosis.
+    std::cerr << "[DEBUG] XML snippet: ";
+    if (xml.size() > 300) {
+        std::cerr << xml.substr(0, 300) << "...\n";
+    } else {
+        std::cerr << xml << "\n";
+    }
 
     ev.provider = XmlExtractTag(xml, "Provider");
     ev.time = XmlTimeToString(xml);
@@ -84,6 +132,9 @@ static bool ExtractFromXml(EVT_HANDLE hEvent, PowerEvent& ev) {
     if (!lvlStr.empty()) {
         try { ev.level = static_cast<uint8_t>(std::stoul(lvlStr)); } catch (...) {}
     }
+    std::cerr << "[DEBUG] XML parsed: provider=" << ev.provider
+              << " time=" << ev.time << " id=" << ev.eventId
+              << " level=" << (int)ev.level << "\n";
     return true;
 }
 
@@ -151,7 +202,12 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
                                    << st.wYear << '-' << std::setw(2) << st.wMonth << '-' << std::setw(2) << st.wDay
                                    << ' ' << std::setw(2) << st.wHour << ':' << std::setw(2) << st.wMinute << ':' << std::setw(2) << st.wSecond;
                                 ev.time = ss.str();
+                            } else {
+                                std::cerr << "[DEBUG] TimeCreated unexpected type: " << EvtTypeName(values[1].Type)
+                                          << " (propCount=" << propCount << ")\n";
                             }
+                        } else {
+                            std::cerr << "[DEBUG] TimeCreated missing (propCount=" << propCount << ")\n";
                         }
                         if (propCount > 2) {
                             if (values[2].Type == EvtVarTypeUInt16) {
