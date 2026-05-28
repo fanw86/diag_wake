@@ -47,7 +47,7 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
     }
 
     // Create a render context that explicitly requests the system properties we need.
-    EVT_SYSTEM_PROPERTY_ID props[] = {
+    DWORD props[] = {
         EvtSystemProviderName,
         EvtSystemTimeCreated,
         EvtSystemEventID,
