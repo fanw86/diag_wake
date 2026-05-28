@@ -123,6 +123,13 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
         return results;
     }
 
+    // EvtNext reads oldest-first by default. Seek backward from the end so we
+    // collect the *most recent* events instead of the oldest 50.
+    if (!EvtSeek(hQuery, -static_cast<LONGLONG>(maxCount), nullptr, 0, EvtSeekRelativeToLast)) {
+        // Fewer than maxCount events total — just start from the beginning.
+        EvtSeek(hQuery, 0, nullptr, 0, EvtSeekRelativeToFirst);
+    }
+
     // Create a render context that explicitly requests the system properties we need.
     // Use ULONG_PTR so each element is pointer-sized; on x64 the API reads 8-byte
     // values from this array, so a DWORD[] would misalign the property IDs.
