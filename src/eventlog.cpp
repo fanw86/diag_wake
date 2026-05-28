@@ -160,7 +160,7 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
                 }
             }
             // Fallback: if system-property rendering failed, extract from raw XML.
-            if (ev.eventId == 0 && ev.time.empty()) {
+            if (ev.eventId == 0 || ev.time.empty()) {
                 ExtractFromXml(hEvents[i], ev);
             }
 
