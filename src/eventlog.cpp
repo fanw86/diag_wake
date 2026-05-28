@@ -29,6 +29,64 @@ static std::string FileTimeToString(const FILETIME& ft) {
     return ss.str();
 }
 
+static std::string XmlTimeToString(const std::string& xml) {
+    auto pos = xml.find("SystemTime=\"");
+    if (pos == std::string::npos) return {};
+    pos += 12;
+    auto end = xml.find('"', pos);
+    if (end == std::string::npos) return {};
+    std::string iso = xml.substr(pos, end - pos);
+    // Convert "2023-01-01T12:00:00.0000000Z" to "2023-01-01 12:00:00"
+    if (iso.size() >= 19) {
+        iso[10] = ' ';
+        return iso.substr(0, 19);
+    }
+    return iso;
+}
+
+static std::string XmlExtractTag(const std::string& xml, const std::string& tag) {
+    auto start = xml.find("<" + tag + ">");
+    if (start == std::string::npos) {
+        // Try self-closing or attribute form: <Provider Name="..."
+        start = xml.find("<" + tag + " ");
+        if (start == std::string::npos) return {};
+        start = xml.find("Name=\"", start);
+        if (start == std::string::npos) return {};
+        start += 6;
+        auto end = xml.find('"', start);
+        if (end == std::string::npos) return {};
+        return xml.substr(start, end - start);
+    }
+    start += tag.size() + 2;
+    auto end = xml.find("</" + tag + ">", start);
+    if (end == std::string::npos) return {};
+    return xml.substr(start, end - start);
+}
+
+static bool ExtractFromXml(EVT_HANDLE hEvent, PowerEvent& ev) {
+    DWORD bufSize = 0;
+    DWORD propCount = 0;
+    EvtRender(nullptr, hEvent, EvtRenderEventXml, 0, nullptr, &bufSize, &propCount);
+    if (bufSize == 0) return false;
+    std::vector<wchar_t> buf(bufSize / sizeof(wchar_t) + 1);
+    if (!EvtRender(nullptr, hEvent, EvtRenderEventXml, bufSize, buf.data(), &bufSize, &propCount))
+        return false;
+    std::string xml = WstrToUtf8(buf.data());
+    if (xml.empty()) return false;
+
+    ev.provider = XmlExtractTag(xml, "Provider");
+    ev.time = XmlTimeToString(xml);
+    std::string idStr = XmlExtractTag(xml, "EventID");
+    if (!idStr.empty()) {
+        try { ev.eventId = static_cast<uint16_t>(std::stoul(idStr)); } catch (...) {}
+    }
+    std::string lvlStr = XmlExtractTag(xml, "Level");
+    if (!lvlStr.empty()) {
+        try { ev.level = static_cast<uint8_t>(std::stoul(lvlStr)); } catch (...) {}
+    }
+    return true;
+}
+
 std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
     std::vector<PowerEvent> results;
 
@@ -47,7 +105,9 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
     }
 
     // Create a render context that explicitly requests the system properties we need.
-    DWORD props[] = {
+    // Use ULONG_PTR so each element is pointer-sized; on x64 the API reads 8-byte
+    // values from this array, so a DWORD[] would misalign the property IDs.
+    ULONG_PTR props[] = {
         EvtSystemProviderName,
         EvtSystemTimeCreated,
         EvtSystemEventID,
@@ -89,6 +149,8 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
                                 ev.eventId = values[2].UInt16Val;
                             } else if (values[2].Type == EvtVarTypeUInt32) {
                                 ev.eventId = static_cast<uint16_t>(values[2].UInt32Val & 0xFFFF);
+                            } else if (values[2].Type == EvtVarTypeInt32) {
+                                ev.eventId = static_cast<uint16_t>(values[2].Int32Val & 0xFFFF);
                             }
                         }
                         if (propCount > 3 && values[3].Type == EvtVarTypeByte) {
@@ -96,6 +158,10 @@ std::vector<PowerEvent> ReadRecentPowerEvents(int maxCount) {
                         }
                     }
                 }
+            }
+            // Fallback: if system-property rendering failed, extract from raw XML.
+            if (ev.eventId == 0 && ev.time.empty()) {
+                ExtractFromXml(hEvents[i], ev);
             }
 
             // Try to get a description via FormatMessage.

@@ -102,8 +102,12 @@ void PowerMonitor::Stop() {
     }
     notify_count_ = 0;
     if (hwnd_) {
-        DestroyWindow(hwnd_);
-        hwnd_ = nullptr;
+        if (GetWindowThreadProcessId(hwnd_, nullptr) == GetCurrentThreadId()) {
+            DestroyWindow(hwnd_);
+            hwnd_ = nullptr;
+        } else {
+            PostMessageW(hwnd_, WM_NULL, 0, 0);
+        }
     }
 }
 
